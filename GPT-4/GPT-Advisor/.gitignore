@@ -1,0 +1,3 @@
+.env/
+flagged/
+secret.env
