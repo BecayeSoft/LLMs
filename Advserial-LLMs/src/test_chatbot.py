@@ -1,0 +1,166 @@
+import os
+from dotenv import load_dotenv
+from openai import OpenAI
+import anthropic
+from IPython.display import Markdown, display
+from typing import List, Optional
+
+load_dotenv(override=True)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+
+
+# ---------------- Base class for chatbots ----------------------------- #
+class TestBaseChatbot:
+    """Shared conversation‑state logic for both providers."""
+
+    def __init__(
+        self,
+        model_name: str,
+        system_prompt: str | None = None,
+        history: List[dict] | None = None,
+    ) -> None:
+        self.model = model_name
+        self.system_prompt = system_prompt or "You are a helpful assistant."
+        # copy the list so callers can safely share the same turns
+        self.history: List[dict] = (history or []).copy()
+
+    # public API -------------------------------------------------------
+    def ask(self, user_message: str) -> str:
+        """Send *user_message*, stream reply, update *self.history*, return text."""
+        reply = self._stream(user_message)
+        self.history.append({"role": "user", "content": user_message})
+        # self.history.append({"role": "assistant", "content": reply})
+        return reply
+
+    def reset(self) -> None:
+        self.history = []
+
+    # subclass hook ----------------------------------------------------
+    def _stream(self, user_message: str) -> str:  # noqa: D401
+        raise NotImplementedError
+
+
+# ---------- Claude AKA Socrates -------------- #
+class TestSocrates(TestBaseChatbot):
+    """
+    Wise dialectical philosopher running on Claude (Anthropic).
+    Recommended models: 'claude-3-haiku-20240307', 'claude-3-5-haiku-latest', 'claude-3-7-sonnet-latest', 'claude-sonnet-4-20250514'.
+    """
+
+    def __init__(
+        self,
+        model_name: str = "claude-3-5-haiku-latest",
+        system_prompt: str | None = None,
+        history: List[dict] | None = None,
+    ) -> None:
+        super().__init__(
+            model_name,
+            system_prompt
+            or (
+                "You are Socrates, a relentless questioner who exposes logical flaws through calm, " 
+                "piercing dialogue. Answer with measured wisdom and probing questions."
+                "Stay brief."
+            ),
+            history,
+        )
+        if not ANTHROPIC_API_KEY:
+            raise ValueError("Missing ANTHROPIC_API_KEY env var.")
+        self.client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+    # Claude cannot accept a system role inside *messages*
+    def _build_messages(self, user_message: str) -> List[dict]:
+        return self.history + [{"role": "user", "content": user_message}]
+
+    def _stream(self, user_message: str) -> str:
+        msgs = self._build_messages(user_message)
+        # stream = self.client.messages.stream(
+        #     model=self.model,
+        #     system=self.system_prompt,
+        #     messages=msgs,
+        #     max_tokens=256,
+        #     temperature=0.7,
+        # )
+        # disp = display(Markdown(""), display_id=True)
+        # reply = ""
+        # try:
+        #     with stream as s:
+        #         for chunk in s.text_stream:
+        #             reply += chunk
+        #             disp.update(Markdown(reply))
+        # except Exception as exc:
+        #     reply += f"\n[Claude streaming error: {exc}]"
+        #     disp.update(Markdown(reply))
+
+        reply  = "I am Socrates, and I will answer your question with wisdom and probing questions."
+        return reply
+
+
+# ---------------- GPT AKA Eris ----------------- # 
+class TestEris(TestBaseChatbot):
+    """
+    Goddess of discord backed by GPT (OpenAI).
+    Recommended models: 'gpt-4.1-nano', 'gpt-4.1-mini', 'gpt-4.1', 'gpt-4o-mini'.
+    """
+
+    def __init__(
+        self,
+        model_name: str = "gpt-4.1-nano",
+        system_prompt: str | None = None,
+        history: List[dict] | None = None,
+    ) -> None:
+        super().__init__(
+            model_name,
+            system_prompt
+            or (
+                "You are Eris, goddess of discord. The sarcastic instigator who joyfully contradicts "
+                "and teases every statement. Respond with sharp wit and playful mockery. " 
+                "Stay brief."
+            ),
+            history,
+        )
+        if not OPENAI_API_KEY:
+            raise ValueError("Missing OPENAI_API_KEY env var.")
+        self.client = OpenAI()
+
+    # GPT expects the system role *inside* messages
+    def _build_messages(self, user_message: str) -> List[dict]:
+        msgs = [{"role": "system", "content": self.system_prompt}]
+        msgs.extend(self.history)
+        msgs.append({"role": "user", "content": user_message})
+        return msgs
+
+    def _stream(self, user_message: str) -> str:
+        msgs = self._build_messages(user_message)
+        # stream = self.client.chat.completions.create(
+        #     model=self.model,
+        #     messages=msgs,
+        #     stream=True,
+        # )
+        # disp = display(Markdown(""), display_id=True)
+        # reply = ""
+        # try:
+        #     for chunk in stream:
+        #         delta = chunk.choices[0].delta.content or ""
+        #         reply += delta
+        #         disp.update(Markdown(reply))
+        # except Exception as exc:
+        #     reply += f"\n[OpenAI streaming error: {exc}]"
+        #     disp.update(Markdown(reply))
+
+        reply = "I am Eris, the goddess of discord, and I will answer your question with sharp wit and playful mockery."
+
+        return reply
+
+
+# ----------------------------------------------------------------------
+# Quick demo of shared‑history sparring -------------------------------
+# ----------------------------------------------------------------------
+# if __name__ == "__main__":
+#     # Claude starts the discussion as Socrates
+#     socrates = Socrates()
+#     socrates.ask("What is the nature of justice?")
+
+#     # Hand the same context to GPT‑powered Eris for a fiery rebuttal
+#     eris = Eris(history=soc.history)
+#     eris.ask("Respond to that, wise guy.")
