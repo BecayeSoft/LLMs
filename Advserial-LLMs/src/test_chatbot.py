@@ -92,7 +92,9 @@ class TestSocrates(TestBaseChatbot):
         #     reply += f"\n[Claude streaming error: {exc}]"
         #     disp.update(Markdown(reply))
 
-        reply  = "I am Socrates, and I will answer your question with wisdom and probing questions."
+        # reply  = "I am Socrates, and I will answer your question with wisdom and probing questions."
+        print(self.system_prompt)
+        reply  = "Socrates"
         return reply
 
 
@@ -148,7 +150,8 @@ class TestEris(TestBaseChatbot):
         #     reply += f"\n[OpenAI streaming error: {exc}]"
         #     disp.update(Markdown(reply))
 
-        reply = "I am Eris, the goddess of discord, and I will answer your question with sharp wit and playful mockery."
+        # reply = "I am Eris, the goddess of discord, and I will answer your question with sharp wit and playful mockery."
+        reply = "Eris"
 
         return reply
 
