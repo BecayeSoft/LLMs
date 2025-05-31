@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import anthropic
 from IPython.display import Markdown, display
-from typing import List, Optional
+from typing import List
 
 load_dotenv(override=True)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -25,22 +25,14 @@ class BaseChatbot:
         # copy the list so callers can safely share the same turns
         self.history: List[dict] = (history or []).copy()
 
-    # public API -------------------------------------------------------
-    # def ask(self, user_message: str) -> str:
-    #     """Send *user_message*, stream reply, update *self.history*, return text."""
-    #     reply = self._stream(user_message)
-    #     self.history.append({"role": "user", "content": user_message})
-    #     self.history.append({"role": "assistant", "content": reply})
-    #     return reply
+    def _update_history(self, user_message: str, assistant_reply: str) -> None:
+        """Extract common history management logic."""
+        self.history.append({"role": "user", "content": user_message})
+        self.history.append({"role": "assistant", "content": assistant_reply})
+
 
     def reset(self) -> None:
         self.history = []
-
-    # subclass hook ----------------------------------------------------
-    # def _stream(self, user_message: str) -> str:  # noqa: D401
-    #     raise NotImplementedError
-
-
 
 
 # ---------- Claude AKA Socrates -------------- #
@@ -60,6 +52,7 @@ class Socrates(BaseChatbot):
                 "You are Socrates, the wise philosopher. You use rational thinking to win arguments " 
                 "Another AI model Eris, goddess of chaos will start a conversation and try to contradict your arguments. "
                 "Crush her with strong arguments. Make her look ridiculous" 
+                "Stay brief. 2 sentences maximum."
                 # "Stay brief. No need to show your inner thoughts."
             ),
             history,
@@ -96,9 +89,9 @@ class Socrates(BaseChatbot):
             yield error_msg
             disp.update(Markdown(reply))
 
-        # Update history after streaming completes (following your base class pattern)
-        self.history.append({"role": "user", "content": user_message})
-        self.history.append({"role": "assistant", "content": reply})
+        # Update history 
+        self._update_history(user_message,  reply)
+
         
         return reply
 
@@ -123,7 +116,7 @@ class Eris(BaseChatbot):
                 "You are Eris, goddess of discord. You are more emotional and never agree with on anything, "
                 "An AI model Socrates, the wise, will try to convince you with strong arguments. "
                 "Ruthelessly destroy his arguments with sharper arguments. You may use sarcasm to make him look ridiculous." 
-                # "Stay brief."
+                "Stay brief. 2 sentences maximum."
             ),
             history,
         )
@@ -160,21 +153,8 @@ class Eris(BaseChatbot):
             yield error_msg
             disp.update(Markdown(reply))
 
-        # Update history after streaming completes (following your base class pattern)
-        self.history.append({"role": "user", "content": user_message})
-        self.history.append({"role": "assistant", "content": reply})
+        # Update history 
+        self._update_history(user_message, reply)
         
         return reply
 
-
-# ----------------------------------------------------------------------
-# Quick demo of shared‑history sparring -------------------------------
-# ----------------------------------------------------------------------
-# if __name__ == "__main__":
-#     # Claude starts the discussion as Socrates
-#     socrates = Socrates()
-#     socrates.ask("What is the nature of justice?")
-
-#     # Hand the same context to GPT‑powered Eris for a fiery rebuttal
-#     eris = Eris(history=soc.history)
-#     eris.ask("Respond to that, wise guy.")
