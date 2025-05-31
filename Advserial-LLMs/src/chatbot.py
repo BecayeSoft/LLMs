@@ -26,28 +26,27 @@ class BaseChatbot:
         self.history: List[dict] = (history or []).copy()
 
     # public API -------------------------------------------------------
-    def ask(self, user_message: str) -> str:
-        """Send *user_message*, stream reply, update *self.history*, return text."""
-        reply = self._stream(user_message)
-        self.history.append({"role": "user", "content": user_message})
-        # self.history.append({"role": "assistant", "content": reply})
-        return reply
+    # def ask(self, user_message: str) -> str:
+    #     """Send *user_message*, stream reply, update *self.history*, return text."""
+    #     reply = self._stream(user_message)
+    #     self.history.append({"role": "user", "content": user_message})
+    #     self.history.append({"role": "assistant", "content": reply})
+    #     return reply
 
     def reset(self) -> None:
         self.history = []
 
     # subclass hook ----------------------------------------------------
-    def _stream(self, user_message: str) -> str:  # noqa: D401
-        raise NotImplementedError
+    # def _stream(self, user_message: str) -> str:  # noqa: D401
+    #     raise NotImplementedError
+
+
 
 
 # ---------- Claude AKA Socrates -------------- #
 class Socrates(BaseChatbot):
-    """
-    Wise dialectical philosopher running on Claude (Anthropic).
-    Recommended models: 'claude-3-haiku-20240307', 'claude-3-5-haiku-latest', 'claude-3-7-sonnet-latest', 'claude-sonnet-4-20250514'.
-    """
-
+    """Similar implementation to TestEris but for Socrates/Claude."""
+    
     def __init__(
         self,
         model_name: str = "claude-3-5-haiku-latest",
@@ -59,9 +58,9 @@ class Socrates(BaseChatbot):
             system_prompt
             or (
                 "You are Socrates, the wise philosopher. You use rational thinking to win arguments " 
-                "The user will give you a topic and you will start the conversation from zero. "
-                "Another AI model Eris, goddess of chaos will then take the place of the user and will try to contradict your arguments. "
-                "Crush her with strong arguemts. Stay brief. No need to show youer inner thoughts."
+                "Another AI model Eris, goddess of chaos will start a conversation and try to contradict your arguments. "
+                "Crush her with strong arguments. Make her look ridiculous" 
+                # "Stay brief. No need to show your inner thoughts."
             ),
             history,
         )
@@ -69,11 +68,11 @@ class Socrates(BaseChatbot):
             raise ValueError("Missing ANTHROPIC_API_KEY env var.")
         self.client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
-    # Claude cannot accept a system role inside *messages*
     def _build_messages(self, user_message: str) -> List[dict]:
         return self.history + [{"role": "user", "content": user_message}]
 
-    def _stream(self, user_message: str) -> str:
+    def stream(self, user_message: str):
+        """Stream response and update history."""
         msgs = self._build_messages(user_message)
         stream = self.client.messages.stream(
             model=self.model,
@@ -87,12 +86,20 @@ class Socrates(BaseChatbot):
         try:
             with stream as s:
                 for chunk in s.text_stream:
-                    reply += chunk
-                    disp.update(Markdown(reply))
+                    if chunk:
+                        reply += chunk
+                        yield chunk
+                        disp.update(Markdown(reply))
         except Exception as exc:
-            reply += f"\n[Claude streaming error: {exc}]"
+            error_msg = f"\n[Claude streaming error: {exc}]"
+            reply += error_msg
+            yield error_msg
             disp.update(Markdown(reply))
 
+        # Update history after streaming completes (following your base class pattern)
+        self.history.append({"role": "user", "content": user_message})
+        self.history.append({"role": "assistant", "content": reply})
+        
         return reply
 
 
@@ -115,8 +122,8 @@ class Eris(BaseChatbot):
             or (
                 "You are Eris, goddess of discord. You are more emotional and never agree with on anything, "
                 "An AI model Socrates, the wise, will try to convince you with strong arguments. "
-                "Ruthelessly destroy his arguments with sharper arguments. You may occasionally use sarcasm" 
-                "Stay brief."
+                "Ruthelessly destroy his arguments with sharper arguments. You may use sarcasm to make him look ridiculous." 
+                # "Stay brief."
             ),
             history,
         )
@@ -124,14 +131,14 @@ class Eris(BaseChatbot):
             raise ValueError("Missing OPENAI_API_KEY env var.")
         self.client = OpenAI()
 
-    # GPT expects the system role *inside* messages
     def _build_messages(self, user_message: str) -> List[dict]:
         msgs = [{"role": "system", "content": self.system_prompt}]
         msgs.extend(self.history)
         msgs.append({"role": "user", "content": user_message})
         return msgs
 
-    def _stream(self, user_message: str) -> str:
+    def stream(self, user_message: str):
+        """Stream response and update history."""
         msgs = self._build_messages(user_message)
         stream = self.client.chat.completions.create(
             model=self.model,
@@ -143,12 +150,20 @@ class Eris(BaseChatbot):
         try:
             for chunk in stream:
                 delta = chunk.choices[0].delta.content or ""
-                reply += delta
-                disp.update(Markdown(reply))
+                if delta:  # Only yield non-empty deltas
+                    reply += delta
+                    yield delta
+                    disp.update(Markdown(reply))
         except Exception as exc:
-            reply += f"\n[OpenAI streaming error: {exc}]"
+            error_msg = f"\n[OpenAI streaming error: {exc}]"
+            reply += error_msg
+            yield error_msg
             disp.update(Markdown(reply))
 
+        # Update history after streaming completes (following your base class pattern)
+        self.history.append({"role": "user", "content": user_message})
+        self.history.append({"role": "assistant", "content": reply})
+        
         return reply
 
 

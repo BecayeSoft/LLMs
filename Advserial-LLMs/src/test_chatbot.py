@@ -11,7 +11,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 
 # ---------------- Base class for chatbots ----------------------------- #
-class TestBaseChatbot:
+class BaseChatbot:
     """Shared conversation‑state logic for both providers."""
 
     def __init__(
@@ -26,28 +26,27 @@ class TestBaseChatbot:
         self.history: List[dict] = (history or []).copy()
 
     # public API -------------------------------------------------------
-    def ask(self, user_message: str) -> str:
-        """Send *user_message*, stream reply, update *self.history*, return text."""
-        reply = self._stream(user_message)
-        self.history.append({"role": "user", "content": user_message})
-        # self.history.append({"role": "assistant", "content": reply})
-        return reply
+    # def ask(self, user_message: str) -> str:
+    #     """Send *user_message*, stream reply, update *self.history*, return text."""
+    #     reply = self._stream(user_message)
+    #     self.history.append({"role": "user", "content": user_message})
+    #     self.history.append({"role": "assistant", "content": reply})
+    #     return reply
 
     def reset(self) -> None:
         self.history = []
 
     # subclass hook ----------------------------------------------------
-    def _stream(self, user_message: str) -> str:  # noqa: D401
-        raise NotImplementedError
+    # def _stream(self, user_message: str) -> str:  # noqa: D401
+    #     raise NotImplementedError
+
+
 
 
 # ---------- Claude AKA Socrates -------------- #
-class TestSocrates(TestBaseChatbot):
-    """
-    Wise dialectical philosopher running on Claude (Anthropic).
-    Recommended models: 'claude-3-haiku-20240307', 'claude-3-5-haiku-latest', 'claude-3-7-sonnet-latest', 'claude-sonnet-4-20250514'.
-    """
-
+class TestSocrates(BaseChatbot):
+    """Similar implementation to TestEris but for Socrates/Claude."""
+    
     def __init__(
         self,
         model_name: str = "claude-3-5-haiku-latest",
@@ -58,9 +57,10 @@ class TestSocrates(TestBaseChatbot):
             model_name,
             system_prompt
             or (
-                "You are Socrates, a relentless questioner who exposes logical flaws through calm, " 
-                "piercing dialogue. Answer with measured wisdom and probing questions."
-                "Stay brief."
+                "You are Socrates, the wise philosopher. You use rational thinking to win arguments " 
+                "The user will give you a topic and you will start the conversation from zero. "
+                "Another AI model Eris, goddess of chaos will then take the place of the user and will try to contradict your arguments. "
+                "Crush her with strong arguments. Stay brief. No need to show your inner thoughts."
             ),
             history,
         )
@@ -68,38 +68,25 @@ class TestSocrates(TestBaseChatbot):
             raise ValueError("Missing ANTHROPIC_API_KEY env var.")
         self.client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
-    # Claude cannot accept a system role inside *messages*
     def _build_messages(self, user_message: str) -> List[dict]:
         return self.history + [{"role": "user", "content": user_message}]
 
-    def _stream(self, user_message: str) -> str:
+    def stream(self, user_message: str):
+        """Stream response and update history."""
         msgs = self._build_messages(user_message)
-        # stream = self.client.messages.stream(
-        #     model=self.model,
-        #     system=self.system_prompt,
-        #     messages=msgs,
-        #     max_tokens=256,
-        #     temperature=0.7,
-        # )
-        # disp = display(Markdown(""), display_id=True)
-        # reply = ""
-        # try:
-        #     with stream as s:
-        #         for chunk in s.text_stream:
-        #             reply += chunk
-        #             disp.update(Markdown(reply))
-        # except Exception as exc:
-        #     reply += f"\n[Claude streaming error: {exc}]"
-        #     disp.update(Markdown(reply))
+        reply = ""
+        for chunk in "I am Socrates bro.":
+            yield chunk
 
-        # reply  = "I am Socrates, and I will answer your question with wisdom and probing questions."
-        print(self.system_prompt)
-        reply  = "Socrates"
+        # Update history after streaming completes (following your base class pattern)
+        self.history.append({"role": "user", "content": user_message})
+        self.history.append({"role": "assistant", "content": reply})
+        
         return reply
 
 
 # ---------------- GPT AKA Eris ----------------- # 
-class TestEris(TestBaseChatbot):
+class TestEris(BaseChatbot):
     """
     Goddess of discord backed by GPT (OpenAI).
     Recommended models: 'gpt-4.1-nano', 'gpt-4.1-mini', 'gpt-4.1', 'gpt-4o-mini'.
@@ -115,8 +102,9 @@ class TestEris(TestBaseChatbot):
             model_name,
             system_prompt
             or (
-                "You are Eris, goddess of discord. The sarcastic instigator who joyfully contradicts "
-                "and teases every statement. Respond with sharp wit and playful mockery. " 
+                "You are Eris, goddess of discord. You are more emotional and never agree with on anything, "
+                "An AI model Socrates, the wise, will try to convince you with strong arguments. "
+                "Ruthelessly destroy his arguments with sharper arguments. You may occasionally use sarcasm" 
                 "Stay brief."
             ),
             history,
@@ -125,34 +113,23 @@ class TestEris(TestBaseChatbot):
             raise ValueError("Missing OPENAI_API_KEY env var.")
         self.client = OpenAI()
 
-    # GPT expects the system role *inside* messages
     def _build_messages(self, user_message: str) -> List[dict]:
         msgs = [{"role": "system", "content": self.system_prompt}]
         msgs.extend(self.history)
         msgs.append({"role": "user", "content": user_message})
         return msgs
 
-    def _stream(self, user_message: str) -> str:
+    def stream(self, user_message: str):
+        """Stream response and update history."""
         msgs = self._build_messages(user_message)
-        # stream = self.client.chat.completions.create(
-        #     model=self.model,
-        #     messages=msgs,
-        #     stream=True,
-        # )
-        # disp = display(Markdown(""), display_id=True)
-        # reply = ""
-        # try:
-        #     for chunk in stream:
-        #         delta = chunk.choices[0].delta.content or ""
-        #         reply += delta
-        #         disp.update(Markdown(reply))
-        # except Exception as exc:
-        #     reply += f"\n[OpenAI streaming error: {exc}]"
-        #     disp.update(Markdown(reply))
+        reply = ""
+        for chunk in "So What? I am Eris!":
+            yield chunk
 
-        # reply = "I am Eris, the goddess of discord, and I will answer your question with sharp wit and playful mockery."
-        reply = "Eris"
-
+        # Update history after streaming completes (following your base class pattern)
+        self.history.append({"role": "user", "content": user_message})
+        self.history.append({"role": "assistant", "content": reply})
+        
         return reply
 
 
