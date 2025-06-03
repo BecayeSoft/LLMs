@@ -12,7 +12,14 @@ from audio.openai_tts import speak_with_openai_tts
 
 def estimate_audio_duration(audio_tuple):
     """
-    Estimate audio duration from (sample_rate, audio_array) tuple.
+    Estimate the duration of an audio clip from a (sample_rate, audio_array) tuple.
+
+    Args:
+        audio_tuple (tuple or None): A tuple containing (sample_rate: int, audio_array: np.ndarray),
+            or None if no audio is present.
+
+    Returns:
+        float: The estimated duration of the audio in seconds. Returns 0 if audio_tuple is None.
     """
     if audio_tuple is None:
         return 0
@@ -20,90 +27,35 @@ def estimate_audio_duration(audio_tuple):
     return len(audio_array) / sample_rate
 
 
-def stream_message(
-        history, 
-        chatbot_instance, 
-        user_message, 
+def speak_message(
+        message,
         is_socrates=True, 
-        delay=0.01, 
         voice=None
     ):
     """
-    Stream message using real API streaming with typing effect.
-    Works with the modified chatbot classes that yield chunks.
+    Generate speech audio for a message using the selected TTS backend.
+
+    Args:
+        message (str): The message to convert to speech.
+        is_socrates (bool, optional): If True, use Socrates voice/persona. Defaults to True.
+        voice (str or None, optional): The TTS backend to use ('kokoro' or None for OpenAI TTS). Defaults to None.
+
+    Returns:
+        tuple: (audio, duration)
+            audio: (sample_rate, np.ndarray) tuple representing the audio.
+            duration: float, estimated duration of the audio in seconds.
     """
-    # Add initial empty message to history
-    if is_socrates:
-        history.append({"role": "assistant", "content": ""})
-    else:
-        history.append({"role": "user", "content": ""})
-
-    current_message = ""
-    
-    # Stream from API
-    try:
-        for chunk in chatbot_instance.stream(user_message):
-            if chunk:
-                # Add delay for typing effect (optional, since API already has natural delays)
-                if delay > 0:
-                    time.sleep(delay)
-                
-                current_message += chunk
-                history[-1]["content"] = current_message
-                yield history, None
-    except Exception as e:
-        # Handle streaming errors gracefully
-        error_msg = f"[Streaming error: {str(e)}]"
-        current_message += error_msg
-        history[-1]["content"] = current_message
-        yield history, None
-
     # Generate audio after streaming is complete
     if voice == 'kokoro':
-        audio = speak_with_kokoro(current_message, is_socrates)
+        audio = speak_with_kokoro(message, is_socrates)
     else:
-        audio = speak_with_openai_tts(current_message, is_socrates)
+        audio = speak_with_openai_tts(message, is_socrates)
     
-    yield history, audio
+    # yield audio, 
     
     # Wait for audio to finish
-    audio_duration = estimate_audio_duration(audio)
-    time.sleep(audio_duration)
+    duration = estimate_audio_duration(audio)
+    # time.sleep(duration)
 
-    return current_message
-
-
-def stream_first_message(
-        history, 
-        message, 
-        is_socrates=True, 
-        delay=0.03, 
-        voice=None
-    ):
-    """
-    Simple typing effect for pre-written messages (like the opening message).
-    """
-    if is_socrates:
-        history.append({"role": "assistant", "content": ""})
-    else:
-        history.append({"role": "user", "content": ""})
-
-    current_message = ""
-    for char in message:
-        current_message += char
-        history[-1]["content"] = current_message
-        yield history, None
-        time.sleep(delay)
-    
-    # Generate audio after typing is complete
-    if voice == 'kokoro':
-        audio = speak_with_kokoro(current_message, is_socrates)
-    else:
-        audio = speak_with_openai_tts(current_message, is_socrates)
-
-    yield history, audio
-    
-    # Wait for audio to finish
-    audio_duration = estimate_audio_duration(audio)
-    time.sleep(audio_duration)
+    return audio, duration
 

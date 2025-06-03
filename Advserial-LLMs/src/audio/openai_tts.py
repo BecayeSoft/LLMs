@@ -38,6 +38,18 @@ Vocal quirks: Draws out certain words mockingly ("Wiiise Socrates"), uses exagge
 
 
 def speak_with_openai_tts(text, is_socrates=True):
+    """
+    Generate speech audio using OpenAI's TTS API for either Socrates or Eris persona.
+
+    Args:
+        text (str): The text to convert to speech.
+        is_socrates (bool, optional): If True, use Socrates voice and prompt; if False, use Eris. Defaults to True.
+
+    Returns:
+        tuple: (sample_rate, audio_data)
+            sample_rate (int): The sample rate of the generated audio.
+            audio_data (np.ndarray): The audio waveform as a numpy array (mono, float32 in range [-1, 1]).
+    """
     character = "Socrates" if is_socrates else "Eris"
     config = CHARACTERS[character]
 

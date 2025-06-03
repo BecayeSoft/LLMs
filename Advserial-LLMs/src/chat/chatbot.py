@@ -12,26 +12,49 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 
 # ---------------- Base class for chatbots ----------------------------- #
 class BaseChatbot:
-    """Shared conversation‑state logic for both providers."""
+    """
+    Base class for chatbots, managing shared conversation state and history logic for both providers.
 
+    Attributes:
+        model (str): The model name used by the chatbot.
+        system_prompt (str): The system prompt for the chatbot's behavior.
+        history (List[dict]): The conversation history as a list of message dicts.
+    """
     def __init__(
         self,
         model_name: str,
         system_prompt: str | None = None,
         history: List[dict] | None = None,
     ) -> None:
+        """
+        Initialize the chatbot with model name, system prompt, and optional history.
+
+        Args:
+            model_name (str): The name of the model to use.
+            system_prompt (str | None, optional): The system prompt for the chatbot. Defaults to a helpful assistant prompt.
+            history (List[dict] | None, optional): Initial conversation history. Defaults to None.
+        """
         self.model = model_name
         self.system_prompt = system_prompt or "You are a helpful assistant."
         # copy the list so callers can safely share the same turns
         self.history: List[dict] = (history or []).copy()
 
     def _update_history(self, user_message: str, assistant_reply: str) -> None:
-        """Extract common history management logic."""
+        """
+        Add the user message and assistant reply to the conversation history.
+
+        Args:
+            user_message (str): The user's message.
+            assistant_reply (str): The assistant's reply.
+        """
         self.history.append({"role": "user", "content": user_message})
         self.history.append({"role": "assistant", "content": assistant_reply})
 
 
     def reset(self) -> None:
+        """
+        Reset the conversation history to an empty list.
+        """
         self.history = []
 
 
@@ -41,20 +64,21 @@ class Socrates(BaseChatbot):
     
     def __init__(
         self,
+        system_prompt: str,
         model_name: str = "claude-3-5-haiku-latest",
-        system_prompt: str | None = None,
         history: List[dict] | None = None,
     ) -> None:
+        """
+        Initialize Socrates chatbot with model, prompt, and optional history.
+
+        Args:
+            model_name (str, optional): The model name for Claude. Defaults to "claude-3-5-haiku-latest".
+            system_prompt (str): The system prompt for Socrates.
+            history (List[dict] | None, optional): Initial conversation history. Defaults to None.
+        """
         super().__init__(
             model_name,
-            system_prompt
-            or (
-                "You are Socrates, the wise philosopher. You use rational thinking to win arguments " 
-                "Another AI model Eris, goddess of chaos will start a conversation and try to contradict your arguments. "
-                "Crush her with strong arguments. Make her look ridiculous" 
-                "Stay brief. 2 sentences maximum."
-                # "Stay brief. No need to show your inner thoughts."
-            ),
+            system_prompt,
             history,
         )
         if not ANTHROPIC_API_KEY:
@@ -62,10 +86,27 @@ class Socrates(BaseChatbot):
         self.client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
     def _build_messages(self, user_message: str) -> List[dict]:
+        """
+        Build the message list for the API call, appending the user message to the current history.
+
+        Args:
+            user_message (str): The user's message.
+        Returns:
+            List[dict]: The list of messages for the API call.
+        """
         return self.history + [{"role": "user", "content": user_message}]
 
     def stream(self, user_message: str):
-        """Stream response and update history."""
+        """
+        Stream the response from Claude and update the conversation history.
+
+        Args:
+            user_message (str): The user's message to send.
+        Yields:
+            str: The next chunk of the assistant's reply as it streams in.
+        Returns:
+            str: The full reply after streaming is complete.
+        """
         msgs = self._build_messages(user_message)
         stream = self.client.messages.stream(
             model=self.model,
@@ -74,7 +115,7 @@ class Socrates(BaseChatbot):
             max_tokens=256,
             temperature=0.7,
         )
-        disp = display(Markdown(""), display_id=True)
+        # disp = display(Markdown(""), display_id=True)
         reply = ""
         try:
             with stream as s:
@@ -82,12 +123,12 @@ class Socrates(BaseChatbot):
                     if chunk:
                         reply += chunk
                         yield chunk
-                        disp.update(Markdown(reply))
+                        # disp.update(Markdown(reply))
         except Exception as exc:
             error_msg = f"\n[Claude streaming error: {exc}]"
             reply += error_msg
             yield error_msg
-            disp.update(Markdown(reply))
+            # disp.update(Markdown(reply))
 
         # Update history 
         self._update_history(user_message,  reply)
@@ -105,19 +146,21 @@ class Eris(BaseChatbot):
 
     def __init__(
         self,
+        system_prompt: str,
         model_name: str = "gpt-4.1-nano",
-        system_prompt: str | None = None,
         history: List[dict] | None = None,
     ) -> None:
+        """
+        Initialize Eris chatbot with model, prompt, and optional history.
+
+        Args:
+            model_name (str, optional): The model name for GPT. Defaults to "gpt-4.1-nano".
+            system_prompt (str): The system prompt for Eris.
+            history (List[dict] | None, optional): Initial conversation history. Defaults to None.
+        """
         super().__init__(
             model_name,
-            system_prompt
-            or (
-                "You are Eris, goddess of discord. You are more emotional and never agree with on anything, "
-                "An AI model Socrates, the wise, will try to convince you with strong arguments. "
-                "Ruthelessly destroy his arguments with sharper arguments. You may use sarcasm to make him look ridiculous." 
-                "Stay brief. 2 sentences maximum."
-            ),
+            system_prompt,
             history,
         )
         if not OPENAI_API_KEY:
@@ -125,20 +168,37 @@ class Eris(BaseChatbot):
         self.client = OpenAI()
 
     def _build_messages(self, user_message: str) -> List[dict]:
+        """
+        Build the message list for the API call, including the system prompt, history, and user message.
+
+        Args:
+            user_message (str): The user's message.
+        Returns:
+            List[dict]: The list of messages for the API call.
+        """
         msgs = [{"role": "system", "content": self.system_prompt}]
         msgs.extend(self.history)
         msgs.append({"role": "user", "content": user_message})
         return msgs
 
     def stream(self, user_message: str):
-        """Stream response and update history."""
+        """
+        Stream the response from OpenAI GPT and update the conversation history.
+
+        Args:
+            user_message (str): The user's message to send.
+        Yields:
+            str: The next chunk of the assistant's reply as it streams in.
+        Returns:
+            str: The full reply after streaming is complete.
+        """
         msgs = self._build_messages(user_message)
         stream = self.client.chat.completions.create(
             model=self.model,
             messages=msgs,
             stream=True,
         )
-        disp = display(Markdown(""), display_id=True)
+        # disp = display(Markdown(""), display_id=True)
         reply = ""
         try:
             for chunk in stream:
@@ -146,12 +206,12 @@ class Eris(BaseChatbot):
                 if delta:  # Only yield non-empty deltas
                     reply += delta
                     yield delta
-                    disp.update(Markdown(reply))
+                    # disp.update(Markdown(reply))
         except Exception as exc:
             error_msg = f"\n[OpenAI streaming error: {exc}]"
             reply += error_msg
             yield error_msg
-            disp.update(Markdown(reply))
+            # disp.update(Markdown(reply))
 
         # Update history 
         self._update_history(user_message, reply)

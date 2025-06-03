@@ -8,12 +8,21 @@ pipeline = KPipeline(lang_code='a', repo_id='hexgrad/Kokoro-82M')
 
 def clean_message(message):
     """
-    Clean up AI-generated text for Kokoro TTS model:
-    - Replace double newlines with three dots.
-    - Replace new lines with a space.
-    - Remove markdown or formatting characters (like **bold**, *italic*, etc.).
-    - Strip markdown/code artifacts (e.g., ```code blocks```, >>> prompts).
-    - Remove excess whitespace and trim.
+    Clean up AI-generated text for the Kokoro TTS model.
+
+    This function performs the following operations:
+        - Replaces double newlines with three dots.
+        - Replaces single newlines with a space.
+        - Removes markdown or formatting characters (e.g., **bold**, *italic*, _underscore_).
+        - Strips markdown/code artifacts (e.g., code blocks, >>> prompts).
+        - Removes stray symbols (e.g., •, →).
+        - Collapses multiple spaces and trims whitespace.
+
+    Args:
+        message (str): The message to clean.
+
+    Returns:
+        str: The cleaned message suitable for TTS input.
     """
     if not isinstance(message, str):
         return ""
@@ -48,10 +57,16 @@ def clean_message(message):
 
 def speak_with_kokoro(text, is_socrates=True):
     """
-    Generate speech with different voices for each character.
-    Socrates gets a masculine voice while Eris gets a feminine voice. 
+    Generate speech audio using the Kokoro TTS model for either Socrates or Eris persona.
 
-    Voices can be found at: https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md.
+    Args:
+        text (str): The text to convert to speech.
+        is_socrates (bool, optional): If True, use Socrates' (masculine) voice; if False, use Eris' (feminine) voice. Defaults to True.
+
+    Returns:
+        tuple: (sample_rate, audio_array)
+            sample_rate (int): The sample rate of the generated audio (always 24000).
+            audio_array (np.ndarray): The audio waveform as a numpy array (float32, mono).
     """
     voice = "am_adam" if is_socrates else "af_heart"
 
